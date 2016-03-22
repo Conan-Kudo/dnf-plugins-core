@@ -31,7 +31,6 @@ import os
 import platform
 import shutil
 import stat
-import iniparse
 
 PLUGIN_CONF = 'copr'
 
@@ -97,18 +96,22 @@ class CoprCommand(dnf.cli.Command):
 
 
         # Useful for forcing a distribution
-        raw_copr_plugin_config = iniparse.compat.ConfigParser()
-        config_files = ['{}/{}.conf'.format(self.base.conf, PLUGIN_CONF) for path in self.base.conf.pluginconfpath]
-        cp.read(config_files)
+        raw_copr_plugin_config = ConfigParser()
+        config_file = None
+        for path in self.base.conf.pluginconfpath:
+            test_config_file = '{}/{}.conf'.format(path, PLUGIN_CONF)
+            if os.path.isfile(test_config_file):
+                config_file = test_config_file
 
-        cp = self.read_config(self.base.conf, PLUGIN_CONF)
-        distribution = (cp.has_section('main')
-                        and cp.has_option('main', 'distribution')
-                        and cp.get('main', 'distribution'))
-        releasever = (cp.has_section('main')
-                      and cp.has_option('main', 'releasever')
-                      and cp.get('main', 'releasever'))
-        self.chroot_config = [distribution, releasever]
+        if config_file is not None:
+            cp = raw_copr_plugin_config.read_file(config_file)
+            distribution = (cp.has_section('main')
+                            and cp.has_option('main', 'distribution')
+                            and cp.get('main', 'distribution'))
+            releasever = (cp.has_section('main')
+                          and cp.has_option('main', 'releasever')
+                          and cp.get('main', 'releasever'))
+            self.chroot_config = [distribution, releasever]
 
 
     def run(self, extcmds):
@@ -263,8 +266,8 @@ Do you want to continue? [y/N]: """)
     def _guess_chroot(cls):
         """ Guess which chroot is equivalent to this machine """
         # FIXME Copr should generate non-specific arch repo
-        dist = self.chroot_config
-        if (dist[0] is False) or (dist[1] is False) or dist is None:
+        dist = cls.chroot_config
+        if dist is None or (dist[0] is False) or (dist[1] is False):
             dist = platform.linux_distribution()
         if "Fedora" in dist:
             # x86_64 because repo-file is same for all arch
